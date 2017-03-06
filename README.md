@@ -39,4 +39,11 @@ python translate.py \
   --from_dev_data="/home/olive/dev/t/telegram_chat_bot/tmp_chpok/.train.a" \
   --to_dev_data="/home/olive/dev/t/telegram_chat_bot/tmp_chpok/.train.b" \
   --steps_per_checkpoint=10
+
+
+python ./translate.py \
+    --en_vocab_size=40000 --fr_vocab_size=40000 \
+    --data_dir="/home/olive/dev/t/telegram_chat_bot/tmp_chpok" \
+    --train_dir="/home/olive/dev/t/telegram_chat_bot/tmp_chpok" \
+    --decode
 ```

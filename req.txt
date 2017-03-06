@@ -2,3 +2,5 @@ tqdm
 pymongo
 tensorflow
 transliterate
+telepot
+pyyaml
