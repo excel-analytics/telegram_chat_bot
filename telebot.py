@@ -8,9 +8,10 @@ import yaml
 from model.translate import decode
 
 
+config = yaml.load(open('config.yml').read())
 in_msg = Queue()
 out_msg = Queue()
-chat_id = -208760457
+chat_id = config['chat_id']
 reload_msg = '/reload'
 
 
@@ -19,7 +20,7 @@ def run_tg(bot):
     print('I am listening ...')
     bot.message_loop()
     while 1:
-        time.sleep(1)
+        time.sleep(10)
 
 
 def f(q_to, q_from):
@@ -36,7 +37,7 @@ def work_with_model(bot):
         bot.sendMessage(chat_id, init)
         while 1:
             message = in_msg.get()
-            if message == reload_msg:
+            if message.startswith(reload_msg):
                 bot.sendMessage(chat_id, 'Wait a lot.')
                 break
             q_to.put(message)
@@ -55,7 +56,8 @@ def handle(msg):
         return
     if 'text' in msg:
         in_msg.put(msg['text'].lower())
-        if msg['text'] != reload_msg:
+        # print(msg['text'].startswith(reload_msg))
+        if not msg['text'].startswith(reload_msg):
             answer = out_msg.get()
             bot.sendMessage(chat_id, answer, reply_to_message_id=msg['message_id'])
 
@@ -63,7 +65,7 @@ def handle(msg):
 # if __name__ == '__main__':
 config = yaml.load(open('config.yml').read())
 bot = telepot.Bot(config['telegram'])
-p = Process(target=run_tg, args=(bot,), daemon=True)
+p = Process(target=run_tg, args=(bot,))
 p.start()
 work_with_model(bot)
 # p.join()
