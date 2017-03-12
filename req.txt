@@ -4,3 +4,6 @@ tensorflow
 transliterate
 telepot
 pyyaml
+pymorphy2
+nltk
+stop_words
