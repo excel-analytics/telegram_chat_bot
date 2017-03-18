@@ -8,26 +8,33 @@ def get_feature_columns(mode):
     feature_columns = []
 
     feature_columns.append(tf.contrib.layers.real_valued_column(
-        column_name="context", dimension=TEXT_FEATURE_SIZE, dtype=tf.int64))
+        column_name="context", dimension=TEXT_FEATURE_SIZE, dtype=tf.int64
+    ))
     feature_columns.append(tf.contrib.layers.real_valued_column(
-            column_name="context_len", dimension=1, dtype=tf.int64))
+        column_name="context_len", dimension=1, dtype=tf.int64
+    ))
     feature_columns.append(tf.contrib.layers.real_valued_column(
-            column_name="utterance", dimension=TEXT_FEATURE_SIZE, dtype=tf.int64))
+        column_name="utterance", dimension=TEXT_FEATURE_SIZE, dtype=tf.int64
+    ))
     feature_columns.append(tf.contrib.layers.real_valued_column(
-            column_name="utterance_len", dimension=1, dtype=tf.int64))
+        column_name="utterance_len", dimension=1, dtype=tf.int64
+    ))
 
     if mode == tf.contrib.learn.ModeKeys.TRAIN:
         # During training we have a label feature
         feature_columns.append(tf.contrib.layers.real_valued_column(
-            column_name="label", dimension=1, dtype=tf.int64))
+            column_name="label", dimension=1, dtype=tf.int64
+        ))
 
     if mode == tf.contrib.learn.ModeKeys.EVAL:
         # During evaluation we have distractors
         for i in range(9):
             feature_columns.append(tf.contrib.layers.real_valued_column(
-                column_name="distractor_{}".format(i), dimension=TEXT_FEATURE_SIZE, dtype=tf.int64))
+                column_name="distractor_{}".format(i), dimension=TEXT_FEATURE_SIZE, dtype=tf.int64
+            ))
             feature_columns.append(tf.contrib.layers.real_valued_column(
-                column_name="distractor_{}_len".format(i), dimension=1, dtype=tf.int64))
+                column_name="distractor_{}_len".format(i), dimension=1, dtype=tf.int64
+            ))
 
     return set(feature_columns)
 
@@ -35,7 +42,7 @@ def get_feature_columns(mode):
 def create_input_fn(mode, input_files, batch_size, num_epochs):
     def input_fn():
         features = tf.contrib.layers.create_feature_spec_for_parsing(
-                get_feature_columns(mode))
+            get_feature_columns(mode))
 
         feature_map = tf.contrib.learn.io.read_batch_features(
                 file_pattern=input_files,
