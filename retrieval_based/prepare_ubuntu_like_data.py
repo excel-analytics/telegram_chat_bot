@@ -100,7 +100,7 @@ def rus_text_prep(text):
     text = re.sub(URL_PATTERN, ' ', text)
     text = re.sub(DIGITS_PATTERN, ' ', text)
     tokens = [MORPH.parse(token)[0].normal_form for token in TOKENIZER.tokenize(text)]
-    tokens = [token for token in tokens if token not in STOPS]
+    # tokens = [token for token in tokens if token not in STOPS]
     return ' '.join(tokens)
 
 
@@ -199,7 +199,7 @@ def like_ubuntu(chat_id, folder, only_reply=False):
         quoting=csv.QUOTE_NONE,
         quotechar='')
     writer.writeheader()
-    coursor = CC.find().sort([('date', ASCENDING)])
+    coursor = CC.find().sort([('date', ASCENDING)]).batch_size(200)
     pbar = tqdm(enumerate(coursor),
         total=coursor.count(),
         smoothing=0.01,
