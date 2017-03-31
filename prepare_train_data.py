@@ -195,161 +195,65 @@ def every_to_every(chat_id, filename_mask):
     test_b.close()
 
 
-def like_ubuntu(chat_id, folder, debug=False):
-    context_word_limit = 100
-    EOU = ' __EOU__ '
-    EOT = ' __EOT__ '
-    EOS = ' __EOS__ '
-    TOKENIZER = RegexpTokenizer(r'\w+')
-    URL_PATTERN = re.compile(r'https?:\/\/[^\s]*')
-    DIGITS = re.compile(r'\d+')
-    MORPH = pymorphy2.MorphAnalyzer()
-    STOPS = get_stop_words('ru')
-    STOPS.extend(get_stop_words('en'))
-    def rus_text_prep(text):
-        text.lower().replace('\n', EOS)
-        text = re.sub(URL_PATTERN, ' ', text)
-        # text = re.sub(DIGITS, ' ', text)
-        tokens = [MORPH.parse(token)[0].normal_form for token in TOKENIZER.tokenize(text)]
-        tokens_no_stops = [token for token in tokens if token not in STOPS]
-        return ' '.join(tokens_no_stops)
-    def get_random_response(go_up=True):
-        pipeline = [
-            {
-                '$match': {'text': {'$exists': True}}
-            },
-            {
-                '$sample': {'size': 1}
-            }
-        ]
-        msg = list(content_collection.aggregate(pipeline))[0]
-        init_msg_id = msg['_id']
-        limit = 1
-        if go_up:
-            limit = 100
-        return get_up_current_utterance(init_msg_id, limit)
-    def reply_context(reply_id):
-        context = str()
-        parrent_msg = {'text': '', 'reply_id': reply_id}
-        while 1:
-            if parrent_msg is None:
-                return context
-            if 'text' not in parrent_msg:
-                return context
-            if len(context.split(' ')) > 100:
-                return context
-            context += EOT + parrent_msg['text']
-            if 'reply_id' not in parrent_msg:
-                return context
-            reply_id = parrent_msg['reply_id']
-            parrent_msg = content_collection.find_one({'_id': reply_id})
-        return context
-    def get_up_current_utterance(msg_id, limit=100):
-        current_utterance = str()
-        main_msg = content_collection.find_one({'_id': msg_id})
-        main_author = main_msg['from']['id']
-        for cnt, prev_msg in enumerate(content_collection.find({'date': {'$lte': main_msg['date']}}).sort([('date', -1)]).limit(100)):
-            if cnt >= limit:
-                return current_utterance
-            if prev_msg is None:
-                return current_utterance
-            if prev_msg['from']['id'] != main_author:
-                return current_utterance
-            if 'text' not in prev_msg:
-                return current_utterance
-            current_utterance += prev_msg['text'] + EOU
-    def get_up_current_context(msg_id, limit=100):
-        current_context = str()
-        main_msg = content_collection.find_one({'_id': msg_id})
-        main_author = main_msg['from']['id']
-        author_changed = False
-        iteration_over = enumerate(content_collection.find({
-                'date': {'$lte': main_msg['date']},
-                'text': {'$exists': True}
-            }).sort([('date', DESCENDING)]).limit(100)
-        )
-        for cnt, prev_msg in iteration_over:
-            if prev_msg['from']['id'] == main_author:
-                if not author_changed:
-                    continue
-            else:
-                author_changed = True
-            if cnt >= limit:
-                return current_context
-            if prev_msg is None:
-                return current_context
-            current_context += prev_msg['text'] + EOU
-            # print('Here {}'.format(msg_id))
-            # pprint(prev_msg)
-        return current_context
+def all_replies(filename_mask):
+    def prepare_and_write(f, phrase):
+        f.write(prepare_text(phrase))
+    def write_train_and_test(train_a, train_b, test_a, test_b, phrase_a, phrase_b):
+        if len(phrase_a) == 0 or len(phrase_b) == 0:
+            return
+        if random.uniform(0, 1) < TEST_RATIO:
+            # Then write to test
+            prepare_and_write(test_a, phrase_a)
+            prepare_and_write(test_b, phrase_b)
+        else:
+            # Else — write train
+            prepare_and_write(train_a, phrase_a)
+            prepare_and_write(train_b, phrase_b)
 
-    chat_id = '$' + chat_id
     content_collection = get_content_collection()
     coursor = content_collection.find({
-        'chat_id': chat_id,
+        'reply_id': {'$exists': True},
         '$or': [
-            {'$and': [{'media.caption': {'$ne': ''}}, {'media.caption': {'$exists': True}}]},
+            {'$and': [
+                {'media.caption': {'$ne': ''}},
+                {'media.caption': {'$exists': True}}
+            ]},
             {'text': {'$exists': True}}
         ]
-    }).sort([('date', 1)])
-    train_csv = open(os.path.join(folder, 'train.csv'), 'w')
-    fieldnames = ['context', 'response', 'label']
-    writer = csv.DictWriter(train_csv,
-        fieldnames=fieldnames,
-        delimiter='\t',
-        quoting=csv.QUOTE_NONE,
-        quotechar='')
-    writer.writeheader()
-    cnt = 0
-    for msg in tqdm(coursor, total=(coursor.count())):
-        cnt += 1
-        if cnt > 30:
-            break
-        curr_msg_text = rus_text_prep(msg.get('text', msg.get('media', {}).get('caption', '')))
-        curr_msg_id = msg['_id']
+    })
+    train_a = open(filename_mask + '.train.a', 'w')
+    train_b = open(filename_mask + '.train.b', 'w')
+    test_a = open(filename_mask + '.test.a', 'w')
+    test_b = open(filename_mask + '.test.b', 'w')
 
-        if 'reply_id' in msg:
-            context = rus_text_prep(reply_context(msg['reply_id']))
-            true_obs = {
-                'response': curr_msg_text,
-                'context': context,
-                'label': 1
-            }
-            false_obs = {
-                'response': rus_text_prep(get_random_response(go_up=False)),
-                'context': context,
-                'label': 0
-            }
-            writer.writerow(true_obs)
-            writer.writerow(false_obs)
-        else:
-            # noreplay
-            context = rus_text_prep(get_up_current_context(curr_msg_id))
-            # print('context =', context)
-            true_obs = {
-                'response': rus_text_prep(get_up_current_utterance(curr_msg_id)),
-                'context': context,
-                'label': 1
-            }
-            false_obs = {
-                'response': rus_text_prep(get_random_response(go_up=True)),
-                'context': context,
-                'label': 0
-            }
-            writer.writerow(true_obs)
-            try:
-                writer.writerow(false_obs)
-            except:
-                pprint(false_obs)
-                raise
-    train_csv.close()
-
+    for phrase in tqdm(coursor, total=(coursor.count()), smoothing=0.01):
+        # Skip if no text in messages
+        if 'text' not in phrase:
+            continue
+        # Or if no repyl
+        if 'reply_id' not in phrase:
+            continue
+        # Get parent message
+        parent_message = content_collection.find_one({'_id': phrase['reply_id']})
+        # If nothing found – skip it
+        if parent_message is None:
+            continue
+        # If there is no explicit text in parent – skip it
+        if 'text' not in parent_message:
+            continue
+        # Ok, there is text in current and parent messages
+        # Looks like time to write it
+        write_train_and_test(train_a, train_b, test_a, test_b, parent_message['text'], phrase['text'])
+    train_a.close()
+    train_b.close()
+    test_a.close()
+    test_b.close()
 
 
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Prepare data for chatbot training.')
-    parser.add_argument('--chat_id', type=str)
+    parser.add_argument('--chat_id', type=str, default='no_chat_id')
     parser.add_argument('--user_a', type=str)
     parser.add_argument('--user_b', type=str)
     parser.add_argument('--file', type=str)
@@ -360,5 +264,5 @@ if __name__ == '__main__':
     # python prepare_train_data.py --chat_id 02000000a072bb000000000000000000 --user_a 0 --user_b 0100000006af22038ee504dc096c8596 --file tmp_chpok/
     # every_to_every(args.chat_id, args.file)
     # python prepare_train_data.py --chat_id 05000000ef461b4143b2772dd6c0a522 --user_a 0 --user_b 0 --file tmp_utro/
-    like_ubuntu(args.chat_id, args.file, True)
+    all_replies(args.file)
     # python prepare_train_data.py --chat_id 05000000ef461b4143b2772dd6c0a522 --user_a 0 --user_b 0 --file tmp_utro/
