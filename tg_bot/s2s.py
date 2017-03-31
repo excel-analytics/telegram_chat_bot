@@ -5,7 +5,7 @@ import time
 import telepot
 import yaml
 
-from model.translate import decode
+from seq2seq.runner import decode
 
 
 config = yaml.load(open('config.yml').read())
@@ -59,6 +59,8 @@ def handle(msg):
         # print(msg['text'].startswith(reload_msg))
         if not msg['text'].startswith(reload_msg):
             answer = out_msg.get()
+            if answer.strip() == '':
+                answer = '%NO_MSG%'
             bot.sendMessage(chat_id, answer, reply_to_message_id=msg['message_id'])
 
 

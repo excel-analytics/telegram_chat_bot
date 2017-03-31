@@ -42,8 +42,8 @@ import numpy as np
 from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
 
-import data_utils as data_utils
-import seq2seq_model as seq2seq_model
+import seq2seq.data_utils as data_utils
+import seq2seq.seq2seq_model as seq2seq_model
 
 
 tf.app.flags.DEFINE_float("learning_rate", 0.5, "Learning rate.")
@@ -55,10 +55,10 @@ tf.app.flags.DEFINE_integer("batch_size", 64,
                             "Batch size to use during training.")
 tf.app.flags.DEFINE_integer("size", 1024, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("num_layers", 3, "Number of layers in the model.")
-tf.app.flags.DEFINE_integer("from_vocab_size", 40000, "English vocabulary size.")
-tf.app.flags.DEFINE_integer("to_vocab_size", 40000, "French vocabulary size.")
-tf.app.flags.DEFINE_string("data_dir", "tmp_chpok", "Data directory")
-tf.app.flags.DEFINE_string("train_dir", "tmp_chpok", "Training directory.")
+tf.app.flags.DEFINE_integer("from_vocab_size", 50000, "English vocabulary size.")
+tf.app.flags.DEFINE_integer("to_vocab_size", 50000, "French vocabulary size.")
+tf.app.flags.DEFINE_string("data_dir", "tmp_hell", "Data directory")
+tf.app.flags.DEFINE_string("train_dir", "tmp_hell", "Training directory.")
 tf.app.flags.DEFINE_string("from_train_data", None, "Training data.")
 tf.app.flags.DEFINE_string("to_train_data", None, "Training data.")
 tf.app.flags.DEFINE_string("from_dev_data", None, "Training data.")
@@ -119,7 +119,7 @@ def read_data(source_path, target_path, max_size=None):
   return data_set
 
 
-def create_model_no_train(session, forward_only, answer_q):
+def create_model(session, forward_only, answer_q):
   """Create translation model and initialize or load parameters in session."""
   dtype = tf.float16 if FLAGS.use_fp16 else tf.float32
   model = seq2seq_model.Seq2SeqModel(
@@ -140,31 +140,6 @@ def create_model_no_train(session, forward_only, answer_q):
     model.saver.restore(session, ckpt.model_checkpoint_path)
   else:
     answer_q.put("Created model with fresh parameters.")
-    session.run(tf.global_variables_initializer())
-  return model
-
-
-def create_model(session, forward_only):
-  """Create translation model and initialize or load parameters in session."""
-  dtype = tf.float16 if FLAGS.use_fp16 else tf.float32
-  model = seq2seq_model.Seq2SeqModel(
-      FLAGS.from_vocab_size,
-      FLAGS.to_vocab_size,
-      _buckets,
-      FLAGS.size,
-      FLAGS.num_layers,
-      FLAGS.max_gradient_norm,
-      FLAGS.batch_size,
-      FLAGS.learning_rate,
-      FLAGS.learning_rate_decay_factor,
-      forward_only=forward_only,
-      dtype=dtype)
-  ckpt = tf.train.get_checkpoint_state(FLAGS.train_dir)
-  if ckpt and tf.train.checkpoint_exists(ckpt.model_checkpoint_path):
-    print("Reading model parameters from %s" % ckpt.model_checkpoint_path)
-    model.saver.restore(session, ckpt.model_checkpoint_path)
-  else:
-    print("Created model with fresh parameters.")
     session.run(tf.global_variables_initializer())
   return model
 
@@ -267,10 +242,10 @@ def train():
         sys.stdout.flush()
 
 
-def decode():
+def decode(question_q, answer_q):
   with tf.Session() as sess:
     # Create model and load parameters.
-    model = create_model(sess, True)
+    model = create_model(sess, True, answer_q)
     model.batch_size = 1  # We decode one sentence at a time.
 
     # Load vocabularies.
@@ -282,10 +257,9 @@ def decode():
     _, rev_fr_vocab = data_utils.initialize_vocabulary(fr_vocab_path)
 
     # Decode from standard input.
-    sys.stdout.write("> ")
-    sys.stdout.flush()
-    sentence = sys.stdin.readline()
-    # sentence = question_q.get()
+    # sys.stdout.write("> ")
+    # sys.stdout.flush()
+    sentence = question_q.get()
     while sentence:
       # Get token-ids for the input sentence.
       token_ids = data_utils.sentence_to_token_ids(tf.compat.as_bytes(sentence), en_vocab)
@@ -310,11 +284,10 @@ def decode():
       if data_utils.EOS_ID in outputs:
         outputs = outputs[:outputs.index(data_utils.EOS_ID)]
       # Print out French sentence corresponding to outputs.
-      # answer_q.put(" ".join([tf.compat.as_str(rev_fr_vocab[output]) for output in outputs]))
-      print(" ".join([tf.compat.as_str(rev_fr_vocab[output]) for output in outputs]))
-      print("> ", end="")
-      sys.stdout.flush()
-      # sentence = question_q.get()
+      answer_q.put(" ".join([tf.compat.as_str(rev_fr_vocab[output]) for output in outputs]))
+      # print("> ", end="")
+      # sys.stdout.flush()
+      sentence = question_q.get()
 
 
 def self_test():
